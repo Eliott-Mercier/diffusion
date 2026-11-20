@@ -1,0 +1,4 @@
+label,loss finale,époques,temps entr. (min),device,énergie (Wh),génération 1000 img (s),confiance,% > 0.9,% ratées,nb chiffres eff.,FID,IS,chiffre min/max %,run
+"U-Net (baseline, 566k)",0.0418,20,2.3,mps,1.536,9.1,0.7809,41.9,0.0,8.73,557.54,4.67,1.6 / 21.4,baseline_20261111-172332
+"U-Net base_ch=40 (témoin, 855k)",0.0389,20,4.2,mps,2.793,16.5,0.7858,43.4,0.0,8.32,-,-,1.5 / 25.7,unet_ch40_temoin_20261113-155816
+ResUNet (869k),0.0304,20,5.7,mps,3.838,16.1,0.889,69.3,0.0,9.21,432.77,6.7,3.0 / 17.0,resunet_20261113-155228

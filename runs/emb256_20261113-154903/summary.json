@@ -1,0 +1,10 @@
+{
+  "device": "mps",
+  "power_w": 40.0,
+  "n_params": 702081,
+  "alpha_bar_final": 4e-05,
+  "final_loss": 0.04032,
+  "train_time_s": 196.8,
+  "total_time_s": 202.9,
+  "energy_wh": 2.255
+}

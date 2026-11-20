@@ -1,0 +1,4 @@
+label,loss finale,époques,temps entr. (min),device,énergie (Wh),génération 1000 img (s),confiance,% > 0.9,% ratées,nb chiffres eff.,FID,IS,chiffre min/max %,run
+batch 64,0.0373,20,3.3,mps,2.229,8.8,0.8055,47.6,0.0,9.3,-,-,2.9 / 15.5,batch64_20261113-153239
+batch 128 (baseline),0.0418,20,2.3,mps,1.536,9.1,0.7809,41.9,0.0,8.73,557.54,4.67,1.6 / 21.4,baseline_20261111-172332
+batch 256,0.0479,20,2.3,mps,1.554,8.7,0.7342,30.9,0.0,7.88,-,-,0.4 / 25.9,batch256_20261113-153601

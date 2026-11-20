@@ -1,0 +1,827 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[margin=25mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{float}
+
+\title{\textbf{Diffusion models on MNIST}}
+\author{RABEMANANTSOA Clarck\
+MERCIER DEL FORNO Eliott\
+FAURE Tristan}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+The project is about generating images of handwritten digits with a diffusion model. The model we study is a DDPM, which stands for Denoising Diffusion Probabilistic Model. It belongs to the stochastic processes course (R. Vaucher, ``Génération par diffusion''), and we also used the Deep Learning course (A. Ragno, ``Generative models'': U-Net, practical 3c, evaluation of generative models).
+
+The goal is simple. We want to learn the distribution of the MNIST digits, and then generate new realistic images. To do this, we follow a systematic testing process on hyperparameters and architectures. We mainly want to understand what improves generation, what changes nothing, and what breaks the model.
+
+The report covers the validation of the DDPM pipeline, reproducibility, the compute budget, the architecture, and a critical analysis of the results. The goal is not to maximize a single loss value. The goal is to show a real experimental process, including our failures.
+
+\section{Methodology}
+\subsection{Dataset}
+We work on MNIST. The first experiments are done at 16x16. Then we move to 28x28 for the final configuration.
+
+The 28x28 resolution is more representative of the problem, because it is the native resolution of the MNIST digits. At 16x16, we can explore much faster (about 2.2 min per run instead of 4.1 min). At 28x28, we validate the true potential of the model.
+
+MNIST images are grayscale, so we keep one input channel in the network. This choice reduces the model size and the compute cost, and it is faithful to the data, since color brings no information for handwritten digits. The pixels are normalized to $[-1, 1]$, like the noise $\mathcal{N}(0, I)$ which is centered on 0: the data and the noise then have the same scale.
+
+\subsection{Baseline}
+
+The baseline is the reference configuration that we use for every comparison. It is a standard U-Net trained at 16x16 with T = 1000, a linear schedule, 20 epochs and a learning rate of 2e-4. Each experiment changes only one parameter of this baseline. This way, any difference in the results comes from that single change. Without a fixed baseline, we could not tell which modification caused an improvement or a failure.
+
+The baseline contains:
+\begin{itemize}[leftmargin=1.5em]
+    \item standard U-Net model (566k parameters)
+    \item image size 16
+    \item T = 1000
+    \item linear schedule
+    \item $\beta_1 = 10^{-4}$ (beta\_start)
+    \item $\beta_T = 0.02$ (beta\_end)
+    \item base channel number 32 (base\_ch)
+    \item embedding dimension 128 (emb\_dim)
+    \item 20 epochs
+    \item batch size 128
+    \item learning rate $2 \times 10^{-4}$ (lr)
+\end{itemize}
+
+The default values of the schedule come from the original DDPM paper of Ho, Jain and Abbeel. They set T = 1000 steps, with beta growing linearly from 1e-4 to 0.02. We kept these values as our baseline for two reasons. First, they are a proven reference, so any failure we observe later cannot come from an unusual schedule. Second, our experiments (section 5.2) showed that what really matters is the value of $\bar{\alpha}_T$ at the end of the schedule, and the paper values guarantee that it is small enough ($4 \times 10^{-5}$) for the final noise to be almost pure.
+
+\subsection{Evaluation}
+The loss alone does not tell whether the generated images are good: this is one of the main messages of this report (sections 5.1, 5.2, 5.7 and 6.4). We therefore evaluate the generated images directly.
+
+\paragraph{Three criteria.} The Deep Learning course asks a generative model to produce images that are \textbf{realistic}, \textbf{diverse} (covering the whole distribution) and \textbf{new} (not copies). Each criterion is covered by at least one measure:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\hline
+criterion & our measures \\
+\hline
+realism & FID, classifier confidence, \% of images with confidence $> 0.9$ \\
+diversity & FID, effective number of digits, IS \\
+novelty & memorization test (nearest neighbor in the training set) \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{The judge.} We train a small CNN classifier on the real MNIST training set (architecture taken from a personal project, 99.3\% test accuracy at 28x28). All generated images, whatever their resolution, are upscaled to 28x28 and scored by this same classifier, so that different resolutions can be compared with the same judge. For 1000 generated images we measure:
+\begin{itemize}[leftmargin=1.5em]
+    \item the average confidence (highest probability given by the classifier);
+    \item the percentage of images recognized with a confidence above 0.9;
+    \item the distribution of the 10 predicted digits;
+    \item the percentage of failed images (see below);
+    \item the effective number of digits $\exp(H)$, where $H$ is the entropy of the digit distribution: 10 if the 10 digits are equally represented, 1 if only one digit is generated;
+    \item the training and generation time.
+\end{itemize}
+
+\paragraph{FID.} The DDPM tries to reproduce the distribution $p(x_0)$ of the data. To measure how close the distribution of the generated images is to it, we use the Fréchet Inception Distance (FID). Each image is represented by 128 features extracted by the classifier, the two distributions (real and generated) are approximated by Gaussians $(\mu, \Sigma)$, and we compute the Wasserstein-2 distance between these two Gaussians:
+\begin{equation*}
+\mathrm{FID} = \lVert \mu_r - \mu_g \rVert^2 + \mathrm{Tr}\left(\Sigma_r + \Sigma_g - 2 (\Sigma_r \Sigma_g)^{1/2}\right).
+\end{equation*}
+The lower it is, the closer the two distributions. The FID normally uses Inception-v3, a classifier trained on color photos (ImageNet); we replace it by our MNIST classifier, which is better suited to digits. \textbf{Consequence: our values can only be compared with each other}, not with the values of published papers. Protocol: 10 000 generated images per model, compared with 10 000 training images, with the same classifier and the same seed for all models. References: real 28x28 images give \textbf{1.2}, real images downscaled to 16x16 and upscaled again give \textbf{359}, pure noise gives 6223. The Inception Score (IS) is computed with the same classifier (maximum 10; real images: 9.8).
+
+\paragraph{Flaws of the metrics that we discovered.} Our measures have blind spots, and we found them during the project:
+\begin{itemize}[leftmargin=1.5em]
+    \item the classifier puts \textbf{pure noise in the class ``8''} with a high confidence. Without correction, the model without time information (section 6.4) had \textbf{the best confidence of all runs (0.903)}, although half of its images are pure noise;
+    \item a model that only generates round ``8'' digits gets a confidence of 0.92;
+    \item corrections: the \textbf{percentage of failed images} (real images always have more than 62\% of black pixels, pure noise about 31\%; below 50\%, the image is failed and counts as a confidence of 0) and the \textbf{effective number of digits} (diversity);
+    \item the FID detects the model without $t$ (746, among the worst), but \textbf{misses the T = 100 failure} of section 5.2 (557, like the baseline), which the IS detects (3.45 against 4.67).
+\end{itemize}
+\textbf{No measure is enough alone: we always read them together}, with the images.
+
+\paragraph{Variability threshold.} We trained the baseline with 3 different seeds (a seed fixes all random choices: initial weights, data order, sampled $t$ and noise). The confidence varies by $\pm 0.01$, the \% above 0.9 by $\pm 2$ points, the FID by $\pm 16$ (546 to 579). \textbf{A smaller difference between two experiments is not an effect.} At 28x28 the FID varies much more: candidate C1 gives 25 with one seed and 63 with the other.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccccc}
+\hline
+baseline & loss & confidence & \% $> 0.9$ & eff. digits & FID \\
+\hline
+seed 0 & 0.0418 & 0.781 & 41.9 & 8.73 & 558 \\
+seed 1 & 0.0427 & 0.768 & 39.2 & 8.99 & 546 \\
+seed 2 & 0.0414 & 0.784 & 42.0 & 8.17 & 579 \\
+\hline
+\end{tabular}
+\caption{Variability between seeds for the same configuration}
+\end{table}
+
+\paragraph{Ceiling of the 16x16 resolution.} Real MNIST images downscaled to 16x16 only get a confidence of 0.931 (against 0.992 at 28x28) and a FID of 359 (against 1.2). No 16x16 model can do better. This is the quantitative reason for the move to 28x28 (section 8).
+
+Finally, all the generated samples shown in this report are produced with the same seed (0) for every run, so the same starting noise is used and the images can be compared fairly.
+
+\section{How a DDPM works}
+A DDPM learns to generate images in two phases.
+
+In the forward phase, we take a real image $x_0$ and add a small amount of Gaussian noise to it, many times. After $t$ steps we get $x_t$. The amount of noise added at each step is controlled by a schedule of values $\beta_1, ..., \beta_T$. These values grow slowly from $\beta_1$ to $\beta_T$. Using the notation $\alpha_t = 1 - \beta_t$ and $\bar{\alpha}_t = \prod_{s=1}^{t} \alpha_s$, we can jump directly to any step with
+
+\begin{equation*}
+x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1 - \bar{\alpha}_t}\, \epsilon, \quad \epsilon \sim \mathcal{N}(0, I).
+\end{equation*}
+
+When $t$ is large, $\bar{\alpha}_t$ goes to 0, so $x_t$ becomes almost pure noise. This is why the schedule must be checked, as we do in section 4.
+
+In the training phase, we teach a network to reverse this process. We sample a real image, a random step $t$, and a noise $\epsilon$. We give the noisy image $x_t$ and the step $t$ to the network. The network predicts the noise $\epsilon$ that was added. We train it with a simple mean squared error loss:
+
+\begin{equation*}
+L = \mathbb{E}_{x_0, t, \epsilon} \left[ \lVert \epsilon - \epsilon_\theta(x_t, t) \rVert^2 \right].
+\end{equation*}
+
+Predicting the noise is linked to the score function of the stochastic course: up to a sign and a factor, the predicted noise is the gradient of the log-density of the noisy data, $\epsilon_\theta(x_t, t) \approx -\sqrt{1-\bar{\alpha}_t}\, \nabla_{x_t} \log p_t(x_t)$. It gives the direction that brings the image back towards the data.
+
+The step $t$ is given to the network through a time embedding, because the network must know how noisy its input is. The same input with less noise does not need the same correction.
+
+In the generation phase, we start from pure noise $x_T \sim \mathcal{N}(0, I)$ and go backwards. At each step, the network predicts the noise in the current image, and we remove a small part of it:
+
+\begin{equation*}
+x_{t-1} = \frac{1}{\sqrt{\alpha_t}} \left( x_t - \frac{\beta_t}{\sqrt{1 - \bar{\alpha}_t}}\, \epsilon_\theta(x_t, t) \right) + \sigma_t z, \quad z \sim \mathcal{N}(0, I), \quad \sigma_t^2 = \beta_t,
+\end{equation*}
+with $z = 0$ at the last step. The course slide writes the last term $\beta_t z$: it is the same idea, since $\beta_t$ is a variance and the noise added is multiplied by its standard deviation $\sqrt{\beta_t}$.
+
+After T steps, we get an image $x_0$ that should look like a real sample. The whole method is therefore simple to summarize. We destroy images with noise in a controlled way, we learn to undo this destruction, and we generate by starting from noise and undoing it step by step. Every choice we test in this report, the schedule, the architecture, the learning rate, acts on one of these three phases.
+
+\section{Validation of the DDPM pipeline}
+The first step is to check that the implementation follows the expected diffusion behavior. The DDPM pipeline is validated with several figures.
+
+\subsection{Schedule}
+Hyperparameters: image\_size = 16x16, T = 1000, beta\_start = 1e-4, beta\_end = 0.02, base\_ch = 32, emb\_dim = 128, batch\_size = 128, lr = 2e-4, model = unet, schedule = linear/cosine.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/verifications/1_schedule.png}
+\caption{Check of the schedule and of $\bar{\alpha}_t$}
+\end{figure}
+
+This figure shows that $\bar{\alpha}_t$ must go to 0. The final value is $4 \times 10^{-5}$ for the baseline (linear, T = 1000) and about 0 for the cosine schedule. With T = 100 and $\beta_T = 0.02$, it is \textbf{0.36}: about 60\% of the image ($\sqrt{0.36}$) is still present at the last step. Since generation starts from pure noise $\mathcal{N}(0, I)$, the model then starts from a distribution it has never seen during training. This is the failure case studied in section 5.2.
+
+\subsection{Noising process}
+Hyperparameters: image\_size = 16x16, T = 1000, beta\_start = 1e-4, beta\_end = 0.02, schedule = linear/cosine. The noising process does not depend on the network, only on the schedule.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/verifications/2_bruitage_linear.png}
+\caption{Noising process of the linear schedule}
+\end{figure}
+
+The noising is progressive, and the image is fully destroyed at the last step. With the linear schedule, the digit is no longer visible from about $t = 500$ ($\bar{\alpha} = 0.08$): a large part of the steps only see almost pure noise.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/verifications/2_bruitage_cosine.png}
+\caption{Noising process of the cosine schedule}
+\end{figure}
+
+The cosine schedule destroys the image more slowly: the digit is still visible at $t = 500$ ($\bar{\alpha} = 0.49$), and it also ends on pure noise.
+
+\subsection{Overfitting on a single mini-batch}
+Hyperparameters: baseline, a single fixed mini-batch of 128 images, lr = 1e-3, 1500 optimization steps.
+
+If the network, the loss and the noising are correct, the model must be able to learn a single mini-batch by heart. We run two versions: (A) the images, $t$ and the noise are fixed; (B) the images are fixed, but $t$ and the noise are sampled again at each step, like in the real training.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/verifications/3_surapprentissage.png}
+\caption{Overfitting on a single mini-batch}
+\end{figure}
+
+In version A, the loss goes down to about \textbf{0.0003}: the network can fit the noise exactly. In version B, the loss stays close to the level of a normal training (about 0.03 to 0.04), because a new noise has to be predicted at every step. The network, the loss and the noising are therefore correct.
+
+\subsection{Trajectory and prediction of x0}
+Hyperparameters: image\_size = 16x16, T = 1000, linear schedule, base\_ch = 32, emb\_dim = 128, batch\_size = 128, lr = 2e-4, model = unet.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/verifications/4_trajectoire.png}
+\caption{Generation trajectory from pure noise to an image}
+\end{figure}
+
+The trajectory shows the transition from pure noise to a readable image. With the linear schedule, the digit appears late, around $t \approx 200$.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/verifications/5_prediction_x0.png}
+\caption{Estimation of $x_0$ from $x_t$ in a single step, for several values of $t$}
+\end{figure}
+
+For small $t$, the one-step estimate of $x_0$ is almost perfect. For large $t$ ($t \geq 500$), it becomes a blurry shape, then noise. When most of the information is destroyed, many clean images are compatible with the same $x_t$, and the best answer for a mean squared error is their average, which is blurry. This is why the generation uses many small steps instead of a single big one.
+
+\textbf{Conclusion:} the DDPM pipeline is validated (schedule, noising, overfitting, step by step generation). We can therefore move to the analysis of the hyperparameters and the architectures.
+
+\subsection{Reproducibility}
+
+All runs use a fixed seed. The configuration of each run is stored with its results, under a name that contains the main change and the date, for example ``C2\_C1+cosine\_28\_20261114-114722''. Each series of experiments can be run again with a single command (scripts \texttt{serie1.sh} to \texttt{serie5.sh} and \texttt{fid.sh} in the folder \texttt{experiences/}, with the hypothesis of each experiment written as a comment), and the comparison tables are regenerated with the \texttt{compare\_*.sh} scripts. The dependencies are listed in \texttt{requirements.txt}. The final weights of the main runs are kept; the intermediate weights (\texttt{checkpoints/}) are not on git because of their size, but the curves they produced are. Every figure of this report can be regenerated from the saved configurations and weights.
+
+\section{Hyperparameter exploration}
+We tested the hyperparameters one by one, at 16x16 and for 20 epochs, each time changing a single value of the baseline. Each experiment follows the same format: hypothesis, change, observation (numbers and images), conclusion. The main figure of each experiment is a grid of 16 images generated with the same starting noise for all runs, rather than the loss curve, because the loss does not measure the quality of the images. Reminder: a difference smaller than $\pm 0.01$ of confidence is not an effect.
+
+\subsection{Linear vs cosine schedule}
+Hyperparameters: baseline, schedule = linear/cosine.
+
+\textbf{Hypothesis.} With the linear schedule, $\bar{\alpha}_t$ is almost 0 from $t/T \approx 0.6$, so about 40\% of the steps only see pure noise. The cosine schedule destroys the image more progressively, so it should give better images.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\hline
+schedule & loss & confidence & \% $> 0.9$ & eff. digits & FID & IS \\
+\hline
+linear (baseline) & 0.0418 & 0.781 & 41.9 & 8.73 & 558 & 4.67 \\
+cosine & 0.0718 & 0.812 & 50.4 & 7.73 & 569 & 4.64 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/schedule/samples.png}
+\caption{Images generated with the same starting noise for linear and cosine}
+\end{figure}
+
+\textbf{Observation.} The cosine schedule improves the confidence (+0.03, beyond the threshold) and the \% above 0.9 (+8.5 points), while its loss is \textbf{much higher} (0.072 against 0.042). The FID does not change (569 against 558, within the variability).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/loss_par_t/schedule.png}
+\caption{Loss as a function of $t$ (left) and of the noise level $\bar{\alpha}_t$ (right), for the linear and cosine schedules}
+\end{figure}
+
+\textbf{Explanation.} The figure above gives the proof: at the same noise level $\bar{\alpha}$, the two models make \textbf{exactly the same error}. The average loss depends on the proportion of easy and hard steps imposed by the schedule. When $x_t$ is almost pure noise, predicting the noise is trivial ($\epsilon \approx x_t$, error about 0.001). The linear schedule has many of these easy steps, so its average loss is lower. The cosine schedule has more intermediate steps, harder but more useful.
+
+\textbf{Conclusion.} Hypothesis confirmed at 16x16 for the confidence. The average loss cannot compare two schedules. Note that this gain disappears once the cosine is combined with the ResUNet at 16x16 (section 7), but it comes back at 28x28 (section 8).
+
+\subsection{Value of T and beta end}
+Hyperparameters: baseline, T = 100, 200, 500 or 1000, beta\_end adapted or not, beta\_start = 1e-5, 1e-4 or 1e-3.
+
+\paragraph{Intentional failure: T = 100 without adapting beta end.}
+\textbf{Hypothesis.} With T = 100 and $\beta_T = 0.02$, $\bar{\alpha}_T = 0.36$: about 60\% of the image is still present at the last step. The model never sees pure noise during training, but generation starts from $\mathcal{N}(0, I)$, so the images should be degraded.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lccccccc}
+\hline
+ & loss & confidence & \% $> 0.9$ & eff. digits & FID & IS & gen. 1000 img \\
+\hline
+T = 1000 (baseline) & 0.0418 & 0.781 & 41.9 & 8.73 & 558 & 4.67 & 9.1 s \\
+T = 100, $\beta_T = 0.02$ & 0.1023 & 0.774 & 38.5 & 6.25 & 557 & 3.45 & 0.9 s \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{runs/T100_beta0.02_20261111-174257_samples_epoch_020.png}
+\caption{Failure of T = 100 with $\beta_T = 0.02$ (not adapted): thick and deformed digits}
+\end{figure}
+
+\textbf{Observation.} The model does not generate noise: it generates \textbf{thick and deformed digits}, with 37\% of ``8'' and almost no ``1'' (1.6\%) or ``7'' (0.7\%). The model believes that there is still some signal in the starting noise, and invents strokes everywhere. Its loss is also worse (0.10 against 0.04). The confidence and the FID stay within the variability: only the distribution of the digits, the effective number of digits and the IS reveal the failure.
+
+\textbf{Conclusion.} Hypothesis confirmed, and it shows a limit of the confidence and of the FID (section 2.3).
+
+\paragraph{T with beta end adapted.}
+\textbf{Hypothesis.} Once $\bar{\alpha}_T \approx 0$ is guaranteed, reducing T should cost little. We adapt $\beta_T$ to keep the same final $\bar{\alpha}_T$ as the baseline.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\hline
+ & confidence & \% $> 0.9$ & eff. digits & gen. 1000 img \\
+\hline
+T = 100 ($\beta_T = 0.189$) & 0.781 & 43.3 & 8.06 & 1.0 s \\
+T = 200 ($\beta_T = 0.0977$) & 0.775 & 41.0 & 8.14 & 1.7 s \\
+T = 500 ($\beta_T = 0.0398$) & 0.762 & 40.3 & 8.80 & 4.3 s \\
+T = 1000 (baseline) & 0.781 & 41.9 & 8.73 & 9.1 s \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/T/samples.png}
+\caption{Images generated with T = 100, 200, 500 and 1000, with $\beta_T$ adapted}
+\end{figure}
+
+\textbf{Observation.} T = 100 gives \textbf{the same quality as T = 1000} (0.781 in both cases), with a \textbf{generation 9 times faster} (1.0 s against 9.1 s for 1000 images). T = 200 is within the variability; T = 500 is slightly below, at the limit of the threshold.
+
+\textbf{Conclusion.} Compared with the failure above, \textbf{what matters is the final $\bar{\alpha}_T$, not T itself}. At 16x16 and 20 epochs, 1000 steps are not necessary.
+
+\paragraph{beta end alone and beta start.}
+\textbf{Hypothesis.} $\beta_T$ sets how fast the image is destroyed; $\beta_1$ only acts on the very first steps, so its effect should be small.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\hline
+ & loss & confidence & \% $> 0.9$ \\
+\hline
+baseline ($\beta_1 = 10^{-4}$, $\beta_T = 0.02$) & 0.0418 & 0.781 & 41.9 \\
+$\beta_T = 0.01$ & 0.0554 & 0.786 & 43.8 \\
+$\beta_T = 0.05$ & 0.0280 & 0.781 & 43.7 \\
+$\beta_1 = 10^{-5}$ & 0.0448 & 0.783 & 41.1 \\
+$\beta_1 = 10^{-3}$ & 0.0319 & 0.777 & 42.7 \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Observation.} No effect on the quality (everything within the variability), while the \textbf{final loss varies by a factor of two} (0.028 to 0.055). With $\beta_T = 0.01$, $\bar{\alpha}_T = 0.006$, still close enough to 0.
+
+\textbf{Conclusion.} Hypothesis confirmed for $\beta_1$, partly rejected for $\beta_T$ (no effect). It is a second proof that the loss does not measure the quality: it depends on the distribution of easy and hard steps imposed by the schedule.
+
+\subsection{Learning rate}
+Hyperparameters: baseline, lr = 1e-4, 2e-4, 5e-4, 1e-3, 2e-3.
+
+\textbf{Hypothesis.} Ho et al. use 2e-4 over \textbf{800 000 steps}; with 20 epochs, we only do \textbf{about 9 400 steps}. With so few steps, a larger learning rate should go further. A value too large could make the training unstable.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\hline
+lr & loss & confidence & \% $> 0.9$ & eff. digits \\
+\hline
+1e-4 & 0.0495 & 0.707 & 25.7 & 7.80 \\
+2e-4 (baseline) & 0.0418 & 0.781 & 41.9 & 8.73 \\
+5e-4 & 0.0352 & 0.823 & 52.5 & 8.78 \\
+1e-3 & 0.0325 & 0.852 & 60.3 & 9.32 \\
+2e-3 & 0.0338 & 0.846 & 59.1 & 8.94 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/lr/samples.png}
+\caption{Images generated with several learning rates (same starting noise)}
+\end{figure}
+
+\textbf{Observation.} The quality increases from 1e-4 to 1e-3 (0.707 to 0.852), then stabilizes: 2e-3 gives 0.846, equal to 1e-3 within the variability. No instability is visible with any of these values.
+
+\textbf{Conclusion.} Hypothesis confirmed: with our budget, 2e-4 is too careful. We keep \textbf{1e-3}. We did observe an instability, but only in a combination of settings (K5, section 7).
+
+\subsection{Batch size}
+Hyperparameters: baseline, batch\_size = 64, 128 or 256.
+
+\textbf{Hypothesis.} With a fixed number of epochs, batch 64 does 2 times more optimization steps than batch 128, and batch 256 two times fewer. Like the learning rate, the result should follow the number of steps.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\hline
+batch size & loss & confidence & \% $> 0.9$ & eff. digits \\
+\hline
+64 & 0.0373 & 0.806 & 47.6 & 9.30 \\
+128 (baseline) & 0.0418 & 0.781 & 41.9 & 8.73 \\
+256 & 0.0479 & 0.734 & 30.9 & 7.88 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/batch/samples.png}
+\caption{Images generated with several batch sizes (same starting noise)}
+\end{figure}
+
+\textbf{Observation.} 0.806 > 0.781 > 0.734: the quality follows the number of optimization steps.
+
+\textbf{Conclusion.} Hypothesis confirmed: within our budget, the number of steps is the limiting factor. The cost is a lower use of the GPU with a small batch. At 28x28 with 50 epochs, batch 64 no longer brings anything (C3 against C2, section 8).
+
+\subsection{Network width}
+Hyperparameters: baseline, base\_ch = 16, 32 or 64.
+
+\textbf{Hypothesis.} A wider network has more capacity, so better images, but it costs more to train and to use.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccccc}
+\hline
+base\_ch & loss & confidence & \% $> 0.9$ & eff. digits & gen. 1000 img \\
+\hline
+16 & 0.0574 & 0.669 & 19.6 & 6.54 & 3.2 s \\
+32 (baseline) & 0.0418 & 0.781 & 41.9 & 8.73 & 9.1 s \\
+64 & 0.0332 & 0.857 & 61.3 & 8.74 & 27.8 s \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/base_ch/samples.png}
+\caption{Images generated with several network widths (same starting noise)}
+\end{figure}
+
+\textbf{Observation.} Large gain with base\_ch = 64 (+0.076), but it trains about 2 times slower and \textbf{generates 3 times slower} (27.8 s against 9.1 s for 1000 images).
+
+\textbf{Conclusion.} Hypothesis confirmed. It is a clear trade-off between capacity and compute time, and the generation cost is paid at every use, not only once. This is why we looked for a better architecture rather than a wider network (section 6.3).
+
+\subsection{Time embedding}
+Hyperparameters: baseline, emb\_dim = 32, 128 or 256.
+
+\textbf{Hypothesis.} As long as $t$ is encoded, the size of the encoding should have a negligible effect.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\hline
+emb\_dim & loss & confidence & \% $> 0.9$ & eff. digits \\
+\hline
+32 & 0.0414 & 0.758 & 36.2 & 7.96 \\
+128 (baseline) & 0.0418 & 0.781 & 41.9 & 8.73 \\
+256 & 0.0403 & 0.805 & 47.7 & 8.71 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/emb_dim/samples.png}
+\caption{Images generated with several sizes of the time embedding (same starting noise)}
+\end{figure}
+
+\textbf{Observation.} $-0.023$ with 32 and $+0.024$ with 256, about 2 times the threshold, while the loss does not change.
+
+\textbf{Conclusion.} Hypothesis rejected: the effect is real but modest. We do not fully understand it (see the conclusion). Our hypothesis is that with 1000 values of $t$, 32 dimensions distinguish neighboring steps less well.
+
+\subsection{Number of epochs}
+Hyperparameters: baseline, a single run of 200 epochs with the weights saved every 5 epochs.
+
+\textbf{Hypothesis.} The loss stagnates quickly, but the images keep improving.
+
+\textbf{Method.} Instead of one run per number of epochs, we trained \textbf{a single run of 200 epochs} and saved the weights regularly. Since the learning rate is constant, the state at epoch $k$ is the one of a run of $k$ epochs: \textbf{a single training gives the whole curve}. The points at 20 and 50 epochs agree with separate runs (0.766 and 0.831 against 0.781 and 0.835), which validates the method.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\hline
+epoch & 5 & 20 & 50 & 100 & 150 & 200 \\
+\hline
+loss & 0.065 & 0.042 & 0.035 & 0.032 & 0.031 & 0.030 \\
+confidence & 0.70 & 0.77 & 0.83 & 0.86 & 0.87 & 0.86 \\
+\% $> 0.9$ & 26 & 37 & 58 & 61 & 64 & 63 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{runs/epochs200_20261114-095829_epoch_050.png}
+    \caption{Epoch 50}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{runs/epochs200_20261114-095829_epoch_100.png}
+    \caption{Epoch 100}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[b]{0.3\textwidth}
+    \includegraphics[width=\textwidth]{runs/epochs200_20261114-095829_epoch_200.png}
+    \caption{Epoch 200}
+  \end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/evolution/epochs200_20261114-095829/courbe.png}
+\caption{Loss and quality over the epochs, on the same figure}
+\end{figure}
+
+\textbf{Observation.} The quality increases clearly up to about 100 epochs, then reaches a plateau around 150 epochs (0.86 to 0.87). \textbf{From epoch 50 to 200, the loss only decreases by 14\%} (0.035 to 0.030), while the confidence still gains 0.04 and the \% above 0.9 gains 5 points. A loss that ``stagnates'' does not mean that we should stop training.
+
+\textbf{Memorization.} Does a long training make the model copy the training images? For each generated image, we look for the closest training image (60 000 images, pixel distance), and we do the same with real test images that the model has never seen. The median distance is 4.54 at epoch 20 and 3.66 at epoch 200 for the generated images, against 3.09 for real test images: the generated images stay \textbf{further} from the training set than new real images. \textbf{No copy}, even after 200 epochs.
+
+\textbf{Conclusion.} Hypothesis confirmed. Half of the total gain is obtained in 20 epochs (2.2 min); going from 100 to 200 epochs doubles the cost for about +0.01. 20 epochs are enough to compare experiments, more are needed for the final model.
+
+\subsection{Resolution}
+Hyperparameters: baseline, image\_size = 16 or 28 (only the resolution changes).
+
+\textbf{Hypothesis.} The ceiling goes from 0.931 (16x16) to 0.992 (28x28), but the task is harder with the same small network: the gain is uncertain.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\hline
+ & confidence & \% $> 0.9$ & eff. digits & FID & training & gen. 1000 img \\
+\hline
+baseline 16x16 & 0.781 & 41.9 & 8.73 & 558 & 2.2 min & 9.1 s \\
+baseline 28x28 & 0.829 & 51.3 & 9.67 & 197 & 4.1 min & 29.1 s \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/resolution/samples.png}
+\caption{Images generated by the baseline at 16x16 and at 28x28}
+\end{figure}
+
+\textbf{Observation.} +0.048 of confidence, a better diversity (9.67 effective digits against 8.73) and a FID divided by almost 3 (197 against 558). Cost: about 2 times the training time and 3 times the generation time (3 times more pixels).
+
+\textbf{Conclusion.} The 28x28 resolution helps even without changing anything else. The 16x16 FID cannot go below 359 (section 2.3), which explains part of the gap. The small U-Net stays far from the ceiling (0.83 against 0.99): at 28x28, the capacity of the model becomes the limit.
+
+\section{Architecture}
+The base network is a U-Net. The strongest single improvement of the project comes from the residual architecture.
+
+\subsection{U-Net}
+Hyperparameters: baseline, model = unet.
+
+The standard U-Net (from practical 3c) is the base model. It has an encoder that halves the resolution twice (16 $\rightarrow$ 8 $\rightarrow$ 4), a decoder that rebuilds the resolution, and skip connections that send the encoder feature maps to the decoder. Each level has a single convolution, and the time embedding is added to the feature maps.
+
+\subsection{Skip connections}
+Hyperparameters: baseline, model = unet\_noskip (same network, the skip connections only transmit zeros, so the number of parameters is the same).
+
+\textbf{Hypothesis.} Without skip connections, the decoder must rebuild everything from the 4x4 map, so the fine details should be lost.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{runs/unet_noskip_20261113-160414_eval.png}
+\caption{Evaluation of the U-Net without skip connections}
+\end{figure}
+
+\textbf{Observation.} Confidence 0.663 (against 0.781), 20.3\% above 0.9, FID 706 (against 558). The digits are fragmented and badly formed.
+
+\textbf{Conclusion.} Hypothesis confirmed: the skip connections carry the fine details of the image.
+
+\subsection{ResUNet}
+Hyperparameters: baseline, model = resunet.
+
+The ResUNet keeps the same structure (3 levels, skip connections), inspired by Ho et al. Each level is a residual block: two convolutions instead of one, a group normalization (GroupNorm) that keeps the activations at a stable scale, a residual connection (the input of the block is added to its output, which helps the gradient to flow), and the time embedding injected in each block.
+
+\textbf{Hypothesis.} This architecture should give better images. But it has 869k parameters against 566k: to check that the gain does not only come from the size, we add a \textbf{control}: a standard U-Net of the same size (base\_ch = 40, 855k parameters).
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccccc}
+\hline
+ & parameters & confidence & \% $> 0.9$ & eff. digits & FID \\
+\hline
+U-Net (baseline) & 566k & 0.781 & 41.9 & 8.73 & 558 \\
+U-Net base\_ch = 40 (control) & 855k & 0.786 & 43.4 & 8.32 & -- \\
+ResUNet & 869k & 0.889 & 69.3 & 9.21 & 433 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/architecture/samples.png}
+\caption{U-Net, control U-Net of the same size, and ResUNet (same starting noise)}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.55\linewidth]{runs/resunet_20261113-155228_trajectoire.png}
+\caption{Generation trajectory of the ResUNet}
+\end{figure}
+
+\textbf{Observation.} The control of the same size does not do better than the baseline (0.786), while the ResUNet reaches 0.889 and 69.3\% above 0.9, the largest gain of all our experiments. The strokes are sharper and more regular. Cost: about 1.4 times the training time of the control.
+
+\textbf{Conclusion.} \textbf{The gain comes from the architecture, not from the number of parameters.} The ResUNet is also more stable: with exactly the same learning rate and batch size, it keeps training where a wide standard U-Net diverges (section 7).
+
+\subsection{Without time information}
+Hyperparameters: baseline, model = unet\_not (same network, but it always receives $t = 0$).
+
+\textbf{Hypothesis.} Without $t$, the network does not know how much noise to remove, so the generation should fail.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{runs/unet_not_20261113-173720_eval.png}
+\caption{Evaluation of the model without the time step $t$}
+\end{figure}
+
+\textbf{Observation.} About \textbf{half of the images stay pure noise} (35\% of failed images), the others are mostly ``1'' and ``8''. FID 746, among the worst. Surprisingly, its training loss is \textbf{almost normal} (0.054 against 0.042), and its loss as a function of $t$ is only slightly above the baseline:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/loss_par_t/sans_t.png}
+\caption{Loss as a function of $t$, with and without the time step}
+\end{figure}
+
+\textbf{Conclusion.} Hypothesis confirmed: the time information is essential. It is a third example of a correct loss with a failed generation. Our explanation: during training, the network can guess the noise level by looking at the image itself (a very noisy image is easy to recognize), so $t$ is partly redundant; but during generation the errors accumulate over 1000 steps, and a slightly wrong estimate of the noise level at the beginning prevents the image from ever leaving the noise. Why it still succeeds on half of its images remains unclear (see the conclusion). This model is also the one that revealed the flaw of the classifier (noise classified as ``8'', section 2.3).
+
+\section{Combinations of the best settings}
+Hyperparameters: 16x16, 20 epochs, gains added one by one.
+
+\textbf{Hypothesis.} Do the individual gains add up? They may overlap: the learning rate, the batch size and the architecture all act on ``how much the model learns within the budget''.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\hline
+ & confidence & \% $> 0.9$ & eff. digits \\
+\hline
+baseline & 0.781 & 41.9 & 8.73 \\
+ResUNet & 0.889 & 69.3 & 9.21 \\
+K1 = ResUNet + lr 1e-3 & 0.897 & 72.2 & 9.19 \\
+K2 = K1 + cosine & 0.897 & 72.2 & 8.94 \\
+K3 = K2 + batch 64 & 0.904 & 74.3 & 9.19 \\
+K4 = K3 + emb\_dim 256 & 0.898 & 72.8 & 9.23 \\
+K5 = wide U-Net (base\_ch 64) + K4 settings & \multicolumn{3}{c}{diverges} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/combinaisons/samples.png}
+\caption{Images generated by the combinations (same starting noise)}
+\end{figure}
+
+\textbf{Observation.} After the ResUNet (+0.11) and the learning rate (+0.008), nothing is measurable anymore: K1 to K4 are all around 0.90, within the variability. \textbf{The gains do not add up at 16x16.} The main reason is the ceiling of the 16x16 resolution (0.931): there is almost no margin left, and the differences between good configurations become smaller than the measurement noise.
+
+\textbf{Failure: K5 diverges.} K5 is a wide standard U-Net (base\_ch 64) with all the settings of K4 (lr 1e-3, cosine, batch 64, emb\_dim 256): the loss decreases normally until epoch 6 (0.061), goes back up to 0.11 at epoch 7, then \textbf{stays blocked at 1.0}: the network always predicts 0 (a MSE of 1 is the variance of the noise). All images are failed. Each of these settings worked alone (base\_ch 64: 0.857; lr 1e-3: 0.852). It is their combination that is unstable: wider network, larger steps, noisier gradient. The ResUNet with \textbf{exactly the same learning rate and batch size} (K3, K4) stays stable, thanks to its normalization.
+
+\textbf{Conclusion.} A gain measured alone does not always combine: each combination must be checked. Since the good configurations cannot be separated at 16x16, we move to 28x28 with three candidates that differ on the uncertain choices:
+\begin{itemize}[leftmargin=1.5em]
+    \item C1 = K1 = ResUNet + lr 1e-3: the simplest and fastest;
+    \item C2 = K2 = C1 + cosine: the cosine brings nothing at 16x16 with the ResUNet, but its effect may change with the resolution;
+    \item C3 = K3 = C2 + batch 64: the best score at 16x16, but about 2 times slower to train.
+\end{itemize}
+K4 is left out (emb\_dim 256 brings nothing once combined), and K5 diverges.
+
+\section{Move to 28x28 and final model}
+
+\subsection{Comparison of the candidates}
+Hyperparameters: image\_size = 28x28, 50 epochs, C1, C2 and C3 as defined above; C1 and C2 trained with 2 seeds.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/candidats_28/loss.png}
+\caption{Loss of the three candidates at 28x28}
+\end{figure}
+
+C1 has the lowest loss (0.022 against 0.037), but C1 uses the linear schedule and C2, C3 the cosine schedule: as shown in section 5.1, their losses cannot be compared. We compare the generated images.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\hline
+ & C1 (2 seeds) & C2 (2 seeds) & C3 (1 seed) \\
+\hline
+confidence & 0.943 / 0.936 & \textbf{0.957 / 0.948} & 0.952 \\
+\% $> 0.9$ & 83.7 / 81.5 & \textbf{87.0 / 85.1} & 85.4 \\
+FID & 25.1 / 62.6 & 53.8 / 46.7 & 24.4 \\
+IS & 8.68 / 8.15 & 8.38 / 8.34 & 8.58 \\
+eff. digits & 9.94 / 9.69 & 9.46 / 9.62 & 9.78 \\
+\hline
+\end{tabular}
+\caption{The three candidates at 28x28}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{runs/C1_resunet_lr1e-3_28_20261114-112548_eval.png}
+\caption{Candidate C1 (seed 0)}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{runs/C2_C1+cosine_28_20261114-114722_eval.png}
+\caption{Candidate C2 (seed 0)}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{runs/C3_C2+batch64_28_20261114-120947_eval.png}
+\caption{Candidate C3}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/comparaisons/C1_vs_C2_graines/samples.png}
+\caption{C1 and C2 with two seeds each (same starting noise)}
+\end{figure}
+
+\textbf{Observation.}
+\begin{itemize}[leftmargin=1.5em]
+    \item All three candidates are far above the 28x28 baseline (0.829, FID 197): from 0.94 to 0.96, close to real images (0.992).
+    \item Only the \textbf{confidence} separates C2 from C1, and it does so on both seeds (+0.013 on average, +3.5 points of \% above 0.9). At 28x28, the cosine schedule becomes useful again, while it brought nothing at 16x16 with the ResUNet: this agrees with the ceiling explanation.
+    \item \textbf{FID and IS do not separate the three candidates}: the differences are smaller than the variability between seeds (C1 gives 25 with one seed and 63 with the other).
+    \item The FID follows the \textbf{diversity}: the two most balanced models (C1 seed 0 and C3, 9.94 and 9.78 effective digits) have the best FID. This is the trade-off between \textbf{fidelity and coverage}: C2 produces the most recognizable digits, C1 and C3 cover the 10 digits slightly better.
+    \item C3 is not better than C2 (0.952 against 0.957, within the variability): batch 64 is left out. Its small gain at 16x16 came from the number of optimization steps, which is no longer the limit with 50 epochs. The training times of this series cannot be used to compare the candidates: the computer was doing other tasks during C1 and C2 (C3 took 15 min, C2 22 min).
+\end{itemize}
+
+\textbf{Conclusion.} C1, C2 and C3 are equivalent in FID and IS. We chose C2 for its higher classifier confidence, consistent across two seeds, at the cost of a very slightly lower diversity. It is a close choice, not a clear victory.
+
+\subsection{Final result and analysis of the final model}
+The final model is C2: \textbf{ResUNet + lr 1e-3 + cosine schedule + 28x28 + 50 epochs}. We give the average over its two seeds, not the best run, to avoid overestimating the result.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\hline
+ & baseline 16x16 & final model C2 (avg. 2 seeds) & real 28x28 images \\
+\hline
+confidence & 0.781 & \textbf{0.952} & 0.992 \\
+\% $> 0.9$ & 41.9 & \textbf{86.1} & 97.5 \\
+effective digits & 8.73 & \textbf{9.54} & 9.91 \\
+FID & 558 & \textbf{50} & 1.2 \\
+\hline
+\end{tabular}
+\caption{From the baseline to the final model}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{runs/C2_C1+cosine_28_20261114-114722_bruitage.png}
+\caption{Noising process with the cosine schedule, at 28x28}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{runs/C2_C1+cosine_28_20261114-114722_trajectoire.png}
+\caption{Generation trajectory of the final model}
+\end{figure}
+
+\textbf{Trajectory.} The digit appears around $t \approx 500$, against $t \approx 200$ for the baseline with the linear schedule: the cosine schedule keeps information for longer. The shape of the digit is decided early, then refined, without a sudden break in the structure.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{runs/C2_C1+cosine_28_20261114-114722_eval.png}
+\caption{Evaluation of the final model by the classifier}
+\end{figure}
+
+\textbf{Evaluation.} Most digits are clean and well formed, and the 10 digits are represented. The least recognized images (bottom row) are ambiguous or badly closed shapes.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/memorisation/C2_C1+cosine_28_20261114-114722_model.png}
+\caption{Memorization test: distance to the closest training image}
+\end{figure}
+
+\textbf{Memorization.} The median distance to the closest training image is \textbf{8.84} for the generated images, against \textbf{8.76} for real test images never seen by the model. The generated images are as ``new'' as real unseen digits: there is no copy. The closest ones are ``1'' digits: a ``1'' is a simple stroke, and there are thousands of almost identical ``1'' in MNIST.
+
+\section{Energy and ecological footprint}
+In this project, the energy is estimated in a simple way, from the training time and an \textbf{assumed} power. For each run, we compute
+
+\begin{equation*}
+E = t \times P,
+\end{equation*}
+
+with $E$ in Wh, $t$ in hours and $P$ in watts. The assumed power is 40 W on the Apple M3 Max GPU (MPS), 45 W on CPU and 70 W on CUDA. This is not a measurement: on the same machine, the energy is simply proportional to the time. It is enough to compare trainings done on the same machine.
+
+The 16x16 baseline on MPS took 132.6 s, that is 2.2 min, for an estimated consumption of 1.54 Wh. The 28x28 baseline took 246.0 s, that is 4.1 min, for 2.85 Wh. The final model C2 took 1323.5 s, that is 22.1 min, for 14.92 Wh. The move to 28x28 and the larger network clearly multiply the compute cost. Over the 40 runs that recorded their energy, the whole project used about 308 Wh (7.7 hours of compute).
+
+\textbf{Limits of the measured times.} In series 2, the computer went to sleep during two runs (93 and 120 min displayed instead of about 3 min); in series 4, C1 and C2 ran while the computer was doing other tasks. We then used \texttt{caffeinate} to prevent sleep. We therefore only compare clear differences in time.
+
+This cost explains why we started with fast experiments at 16x16, and only then validated the most promising configurations at 28x28: the small runs let us test many variants at a low cost, while the large runs were kept for the configurations with real potential.
+
+The final model stays a good trade-off: much better than the baseline, for about 15 Wh per training. For a single training, the main cost comes from the training. But the generation is paid at \textbf{every} use: 1000 images take about 55 s with T = 1000. With T = 100 and an adapted $\beta_T$, this cost was divided by about 9 at 16x16 without loss of quality (section 5.2).
+
+\section{Conclusion}
+The project validated the DDPM pipeline on MNIST: schedule, noising, overfitting on a mini-batch, step by step generation and one-step reconstruction. A systematic exploration, one parameter at a time and with a variability threshold, showed what improves the generation (the residual architecture, the learning rate, the resolution, the number of epochs), what changes nothing ($\beta_1$, $\beta_T$, T once $\bar{\alpha}_T \approx 0$), and what breaks the model (a final noise that is not pure, no time information, no skip connections, an unstable combination). Several of these experiments showed that \textbf{the loss does not measure the quality of the images}.
+
+The final model C2 combines a residual architecture, a learning rate of 1e-3, a cosine schedule and a 28x28 resolution. Its confidence goes from 0.781 (baseline) to 0.952, and its FID from 558 to about 50. The quality of a diffusion model does not depend on a single hyperparameter, but on the combination of the architecture, the schedule, the resolution and the compute budget.
+
+\paragraph{Limits.}
+\begin{itemize}[leftmargin=1.5em]
+    \item We stay below real images (0.952 against 0.992, FID about 50 against 1.2).
+    \item The quality was still increasing at 50 epochs: more epochs would probably help.
+    \item The judge and the FID depend on our classifier; another network would give other values.
+    \item Only 1 to 2 seeds at 28x28, so the variability at this resolution is estimated on few points.
+    \item The generation is slow (1000 steps).
+\end{itemize}
+
+\paragraph{Possible improvements.}
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Classifier-free guidance} (practical 3c): give the label to the network to choose the generated digit, which would also correct the imbalance between digits.
+    \item \textbf{DDIM} (Song et al., cited in the stochastic course): generate in about 50 steps instead of 1000, without retraining.
+    \item \textbf{EMA} of the weights (Ho et al.): generate with a moving average of the weights, often cleaner images for almost no cost.
+    \item \textbf{T = 100 with an adapted $\beta_T$ at 28x28}: same quality and 9 times faster generation at 16x16, not yet checked at 28x28.
+    \item More epochs for the final model.
+\end{itemize}
+
+\paragraph{What we do not fully understand.}
+\begin{itemize}[leftmargin=1.5em]
+    \item Why the model without time information still succeeds on half of its images.
+    \item Why the size of the time embedding has more effect than expected.
+    \item Why the FID of the same configuration varies so much from one seed to another at 28x28 (25 against 63 for C1).
+\end{itemize}
+
+\newpage
+
+\section*{Bibliography}
+\begin{itemize}[leftmargin=1.5em]
+    \item J. Ho, A. Jain, P. Abbeel, \textit{Denoising Diffusion Probabilistic Models}, 2020.
+    \item A. Nichol, P. Dhariwal, \textit{Improved Denoising Diffusion Probabilistic Models}, 2021.
+    \item J. Song, C. Meng, S. Ermon, \textit{Denoising Diffusion Implicit Models}, 2021.
+    \item J. Ho, T. Salimans, \textit{Classifier-Free Diffusion Guidance}, 2022.
+    \item M. Heusel et al., \textit{GANs Trained by a Two Time-Scale Update Rule Converge to a Local Nash Equilibrium}, 2017 (FID).
+    \item Y. LeCun et al., \textit{The MNIST database of handwritten digits}.
+    \item R. Vaucher, stochastic processes course, chapter 4 ``Génération par diffusion''.
+    \item A. Ragno, Deep Learning course, ``Generative models'' (U-Net, practical 3c, evaluation of generative models).
+    \item Classifier architecture: \url{https://github.com/SabaMG/mnist-cnn-pytorch}.
+\end{itemize}
+
+\end{document}

@@ -1,0 +1,4 @@
+label,loss finale,époques,temps entr. (min),device,énergie (Wh),génération 1000 img (s),confiance,% > 0.9,% ratées,nb chiffres eff.,FID,IS,chiffre min/max %,run
+U-Net complet,0.0418,20,2.3,mps,1.536,9.1,0.7809,41.9,0.0,8.73,557.54,4.67,1.6 / 21.4,baseline_20261111-172332
+sans skip connections,0.0529,20,92.8,mps,62.006,9.4,0.6626,20.3,0.0,7.21,705.74,3.05,0.6 / 25.5,unet_noskip_20261113-160414
+sans t,0.054,20,120.2,mps,80.172,9.4,0.5532,39.8,35.0,5.55,746.34,3.11,0.5 / 36.6,unet_not_20261113-173720

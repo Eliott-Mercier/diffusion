@@ -1,0 +1,8 @@
+{
+  "fid": 746.34,
+  "is": 3.11,
+  "pct_ratees": 34.4,
+  "n": 10000,
+  "temps_generation_s": 103.1,
+  "protocole": "classifieur MNIST 28x28 (128 caractéristiques), réf. = 10000 images d'entraînement"
+}

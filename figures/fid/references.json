@@ -1,0 +1,14 @@
+{
+  "vraies images 28x28 (test)": {
+    "fid": 1.16,
+    "is": 9.8
+  },
+  "vraies images 16x16 agrandies (test)": {
+    "fid": 358.66,
+    "is": 8.09
+  },
+  "bruit pur N(0, I)": {
+    "fid": 6223.32,
+    "is": 1.0
+  }
+}

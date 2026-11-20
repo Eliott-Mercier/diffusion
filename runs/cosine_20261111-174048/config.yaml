@@ -1,0 +1,15 @@
+name: cosine
+seed: 0
+image_size: 16
+batch_size: 128
+T: 1000
+schedule: cosine
+beta_start: 0.0001
+beta_end: 0.02
+base_ch: 32
+emb_dim: 128
+epochs: 20
+lr: 0.0002
+sample_every: 5
+n_samples: 64
+power_w: 0.0

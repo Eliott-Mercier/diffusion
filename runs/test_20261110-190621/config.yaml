@@ -1,0 +1,14 @@
+name: test
+seed: 0
+image_size: 16
+batch_size: 128
+T: 200
+schedule: linear
+beta_start: 0.0001
+beta_end: 0.05
+base_ch: 32
+emb_dim: 128
+epochs: 3
+lr: 0.0002
+sample_every: 1
+n_samples: 64

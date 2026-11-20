@@ -1,0 +1,63 @@
+{
+  "pct_ratees": 0.0,
+  "confiance_moyenne": 0.9515,
+  "pct_confiantes": 85.4,
+  "repartition": [
+    90,
+    82,
+    121,
+    80,
+    114,
+    80,
+    150,
+    81,
+    102,
+    100
+  ],
+  "nb_chiffres_effectif": 9.78,
+  "chiffre_min_pct": 8.0,
+  "chiffre_max_pct": 15.0,
+  "temps_generation_s": 61.3,
+  "n": 1000,
+  "reference_vraies_images": {
+    "pct_ratees": 0.0,
+    "confiance_moyenne": 0.9918,
+    "pct_confiantes": 97.5,
+    "repartition": [
+      87,
+      126,
+      117,
+      106,
+      112,
+      89,
+      86,
+      97,
+      85,
+      95
+    ],
+    "nb_chiffres_effectif": 9.91,
+    "chiffre_min_pct": 8.5,
+    "chiffre_max_pct": 12.6
+  },
+  "reference_28_natif": {
+    "pct_ratees": 0.0,
+    "confiance_moyenne": 0.9918,
+    "pct_confiantes": 97.5,
+    "repartition": [
+      87,
+      126,
+      117,
+      106,
+      112,
+      89,
+      86,
+      97,
+      85,
+      95
+    ],
+    "nb_chiffres_effectif": 9.91,
+    "chiffre_min_pct": 8.5,
+    "chiffre_max_pct": 12.6
+  },
+  "juge": "classifieur 28x28"
+}

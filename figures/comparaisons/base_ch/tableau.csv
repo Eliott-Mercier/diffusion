@@ -1,0 +1,4 @@
+label,loss finale,époques,temps entr. (min),device,énergie (Wh),génération 1000 img (s),confiance,% > 0.9,% ratées,nb chiffres eff.,FID,IS,chiffre min/max %,run
+base_ch=16,0.0574,20,2.8,mps,1.864,3.2,0.669,19.6,0.0,6.54,-,-,0.1 / 35.0,base_ch16_20261113-153824
+base_ch=32 (baseline),0.0418,20,2.3,mps,1.536,9.1,0.7809,41.9,0.0,8.73,557.54,4.67,1.6 / 21.4,baseline_20261111-172332
+base_ch=64,0.0332,20,4.7,mps,3.143,27.8,0.8572,61.3,0.0,8.74,-,-,2.3 / 23.4,base_ch64_20261113-154114

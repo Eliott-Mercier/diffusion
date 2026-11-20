@@ -1,0 +1,17 @@
+name: K5_unet64_combo
+seed: 0
+image_size: 16
+batch_size: 64
+T: 1000
+schedule: cosine
+beta_start: 0.0001
+beta_end: 0.02
+model: unet
+base_ch: 64
+emb_dim: 256
+epochs: 20
+lr: 0.001
+sample_every: 5
+n_samples: 64
+checkpoint_every: 0
+power_w: 0.0

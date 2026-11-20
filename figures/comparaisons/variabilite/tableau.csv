@@ -1,0 +1,4 @@
+label,loss finale,époques,temps entr. (min),device,énergie (Wh),génération 1000 img (s),confiance,% > 0.9,% ratées,nb chiffres eff.,FID,IS,chiffre min/max %,run
+seed 0,0.0418,20,2.3,mps,1.536,9.1,0.7809,41.9,0.0,8.73,557.54,4.67,1.6 / 21.4,baseline_20261111-172332
+seed 1,0.0427,20,2.1,mps,1.398,8.7,0.7684,39.2,0.0,8.99,546.26,4.7,2.1 / 17.4,seed1_20261111-173627
+seed 2,0.0414,20,2.1,mps,1.449,8.6,0.7843,42.0,0.0,8.17,578.56,4.48,1.2 / 25.8,seed2_20261111-173835

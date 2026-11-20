@@ -1,0 +1,4 @@
+label,loss finale,époques,temps entr. (min),device,énergie (Wh),génération 1000 img (s),confiance,% > 0.9,% ratées,nb chiffres eff.,FID,IS,chiffre min/max %,run
+5 époques,0.0652,5,0.5,mps,0.32,8.8,0.6989,26.0,0.0,5.16,783.19,2.54,0.3 / 48.9,epochs5_20261111-174502
+20 époques,0.0418,20,2.3,mps,1.536,9.1,0.7809,41.9,0.0,8.73,557.54,4.67,1.6 / 21.4,baseline_20261111-172332
+50 époques,0.0353,50,6.3,mps,4.193,8.8,0.8348,56.0,0.0,8.17,526.59,5.19,2.2 / 30.6,epochs50_20261111-174533

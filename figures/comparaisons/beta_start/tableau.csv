@@ -1,0 +1,4 @@
+label,loss finale,époques,temps entr. (min),device,énergie (Wh),génération 1000 img (s),confiance,% > 0.9,% ratées,nb chiffres eff.,FID,IS,chiffre min/max %,run
+β_start=1e-5,0.0448,20,3.5,mps,2.334,8.8,0.7825,41.1,0.0,8.52,-,-,1.2 / 22.6,beta_start1e-5_20261113-152603
+β_start=1e-4 (baseline),0.0418,20,2.3,mps,1.536,9.1,0.7809,41.9,0.0,8.73,557.54,4.67,1.6 / 21.4,baseline_20261111-172332
+β_start=1e-3,0.0319,20,3.0,mps,2.013,8.7,0.7769,42.7,0.0,8.42,-,-,1.3 / 24.5,beta_start1e-3_20261113-152935

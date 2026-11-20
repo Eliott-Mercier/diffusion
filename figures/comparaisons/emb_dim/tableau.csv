@@ -1,0 +1,4 @@
+label,loss finale,époques,temps entr. (min),device,énergie (Wh),génération 1000 img (s),confiance,% > 0.9,% ratées,nb chiffres eff.,FID,IS,chiffre min/max %,run
+emb_dim=32,0.0414,20,3.0,mps,2.011,8.8,0.7581,36.2,0.0,7.96,-,-,0.6 / 28.3,emb32_20261113-154559
+emb_dim=128 (baseline),0.0418,20,2.3,mps,1.536,9.1,0.7809,41.9,0.0,8.73,557.54,4.67,1.6 / 21.4,baseline_20261111-172332
+emb_dim=256,0.0403,20,3.4,mps,2.255,8.7,0.8051,47.7,0.0,8.71,-,-,1.8 / 22.7,emb256_20261113-154903
