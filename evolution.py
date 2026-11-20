@@ -30,9 +30,9 @@ def main():
         epoch = int(ckpt.stem.split("_")[1])
         _, imgs, _ = generate(run, args.n, device, weights=f"checkpoints/{ckpt.name}")
         m = judge(clf, imgs)[2]
-        rows.append({"epoch": epoch, "loss": round(loss[epoch], 5), "confiance": m["confiance_moyenne"],
-                     "pct_confiantes": m["pct_confiantes"], "pct_ratees": m["pct_ratees"],
-                     "nb_chiffres_effectif": m["nb_chiffres_effectif"]})
+        rows.append({"epoch": epoch, "loss": round(loss[epoch], 5), "confidence": m["mean_confidence"],
+                 "pct_confident": m["pct_confident"], "pct_failed": m["pct_failed"],
+                 "effective_digit_count": m["effective_digit_count"]})
         grids[epoch] = make_grid(to_img(imgs[:16].cpu()), nrow=8, pad_value=1)
         print(rows[-1])
 
@@ -43,19 +43,19 @@ def main():
 
     ep = [r["epoch"] for r in rows]
     fig, ax1 = plt.subplots(figsize=(8, 4.5))
-    ax1.plot(sorted(loss), [loss[e] for e in sorted(loss)], color="gray", label="loss (moyenne sur t)")
-    ax1.set_xlabel("époque"), ax1.set_ylabel("loss", color="gray"), ax1.set_yscale("log")
+    ax1.plot(sorted(loss), [loss[e] for e in sorted(loss)], color="gray", label="loss (average over t)")
+    ax1.set_xlabel("epoch"), ax1.set_ylabel("loss", color="gray"), ax1.set_yscale("log")
     ax2 = ax1.twinx()
-    ax2.plot(ep, [r["confiance"] for r in rows], marker=".", color="tab:blue", label="confiance du juge")
-    ax2.plot(ep, [r["pct_confiantes"] / 100 for r in rows], marker=".", color="tab:orange", label="part > 0.9")
-    ax2.set_ylabel("qualité (juge)"), ax2.set_ylim(0, 1)
+    ax2.plot(ep, [r["confidence"] for r in rows], marker=".", color="tab:blue", label="judge confidence")
+    ax2.plot(ep, [r["pct_confident"] / 100 for r in rows], marker=".", color="tab:orange", label="fraction > 0.9")
+    ax2.set_ylabel("quality (judge)"), ax2.set_ylim(0, 1)
     h1, l1 = ax1.get_legend_handles_labels()
     h2, l2 = ax2.get_legend_handles_labels()
     ax2.legend(h1 + h2, l1 + l2, fontsize=8, loc="center right")
     ax1.grid(alpha=0.3)
-    ax1.set_title(f"Loss et qualité au fil des époques : {run.name}")
+    ax1.set_title(f"Loss and quality over epochs: {run.name}")
     fig.tight_layout()
-    fig.savefig(out / "courbe.png", dpi=120)
+    fig.savefig(out / "curve.png", dpi=120)
     plt.close(fig)
 
     show = [e for e in ep if e in (5, 10, 20, 50, 100, 150, 200)] or ep[:: max(1, len(ep) // 6)]
@@ -64,13 +64,13 @@ def main():
     for ax, e in zip(axes[:, 0], show):
         r = by_epoch[e]
         ax.imshow(grids[e].permute(1, 2, 0))
-        ax.set_title(f"époque {e} : confiance {r['confiance']:.2f}, {r['pct_confiantes']}% > 0.9", fontsize=9)
+        ax.set_title(f"epoch {e}: confidence {r['confidence']:.2f}, {r['pct_confident']}% > 0.9", fontsize=9)
         ax.axis("off")
-    fig.suptitle("Mêmes graines, différentes époques")
+    fig.suptitle("Same seeds, different epochs")
     fig.tight_layout()
     fig.savefig(out / "samples.png", dpi=120)
     plt.close(fig)
-    print(f"Figures dans {out}/")
+    print(f"Figures in {out}/")
 
 
 if __name__ == "__main__":

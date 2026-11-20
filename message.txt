@@ -24,7 +24,7 @@ FAURE Tristan}
 \newpage
 
 \section{Introduction}
-The project is about generating images of handwritten digits with a diffusion model. The model we study is a DDPM, which stands for Denoising Diffusion Probabilistic Model. It belongs to the stochastic processes course (R. Vaucher, ``Génération par diffusion''), and we also used the Deep Learning course (A. Ragno, ``Generative models'': U-Net, practical 3c, evaluation of generative models).
+The project is about generating images of handwritten digits with a diffusion model. The model we study is a DDPM, which stands for Denoising Diffusion Probabilistic Model. It belongs to the stochastic processes course (R. Vaucher, ``Diffusion Generation''), and we also used the Deep Learning course (A. Ragno, ``Generative models'': U-Net, practical 3c, evaluation of generative models).
 
 The goal is simple. We want to learn the distribution of the MNIST digits, and then generate new realistic images. To do this, we follow a systematic testing process on hyperparameters and architectures. We mainly want to understand what improves generation, what changes nothing, and what breaks the model.
 
@@ -87,7 +87,7 @@ novelty & memorization test (nearest neighbor in the training set) \\
     \item the training and generation time.
 \end{itemize}
 
-\paragraph{FID.} The DDPM tries to reproduce the distribution $p(x_0)$ of the data. To measure how close the distribution of the generated images is to it, we use the Fréchet Inception Distance (FID). Each image is represented by 128 features extracted by the classifier, the two distributions (real and generated) are approximated by Gaussians $(\mu, \Sigma)$, and we compute the Wasserstein-2 distance between these two Gaussians:
+\paragraph{FID.} The DDPM tries to reproduce the distribution $p(x_0)$ of the data. To measure how close the distribution of the generated images is to it, we use the Frechet Inception Distance (FID). Each image is represented by 128 features extracted by the classifier, the two distributions (real and generated) are approximated by Gaussians $(\mu, \Sigma)$, and we compute the Wasserstein-2 distance between these two Gaussians:
 \begin{equation*}
 \mathrm{FID} = \lVert \mu_r - \mu_g \rVert^2 + \mathrm{Tr}\left(\Sigma_r + \Sigma_g - 2 (\Sigma_r \Sigma_g)^{1/2}\right).
 \end{equation*}
@@ -245,7 +245,7 @@ cosine & 0.0718 & 0.812 & 50.4 & 7.73 & 569 & 4.64 \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/schedule/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/schedule/samples.png}
 \caption{Images generated with the same starting noise for linear and cosine}
 \end{figure}
 
@@ -309,7 +309,7 @@ T = 1000 (baseline) & 0.781 & 41.9 & 8.73 & 9.1 s \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/T/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/T/samples.png}
 \caption{Images generated with T = 100, 200, 500 and 1000, with $\beta_T$ adapted}
 \end{figure}
 
@@ -361,7 +361,7 @@ lr & loss & confidence & \% $> 0.9$ & eff. digits \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/lr/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/lr/samples.png}
 \caption{Images generated with several learning rates (same starting noise)}
 \end{figure}
 
@@ -389,7 +389,7 @@ batch size & loss & confidence & \% $> 0.9$ & eff. digits \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/batch/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/batch/samples.png}
 \caption{Images generated with several batch sizes (same starting noise)}
 \end{figure}
 
@@ -417,7 +417,7 @@ base\_ch & loss & confidence & \% $> 0.9$ & eff. digits & gen. 1000 img \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/base_ch/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/base_ch/samples.png}
 \caption{Images generated with several network widths (same starting noise)}
 \end{figure}
 
@@ -445,7 +445,7 @@ emb\_dim & loss & confidence & \% $> 0.9$ & eff. digits \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/emb_dim/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/emb_dim/samples.png}
 \caption{Images generated with several sizes of the time embedding (same starting noise)}
 \end{figure}
 
@@ -493,7 +493,7 @@ confidence & 0.70 & 0.77 & 0.83 & 0.86 & 0.87 & 0.86 \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/evolution/epochs200_20261114-095829/courbe.png}
+\includegraphics[width=0.8\linewidth]{figures/evolution/epochs200_20261114-095829/curve.png}
 \caption{Loss and quality over the epochs, on the same figure}
 \end{figure}
 
@@ -522,7 +522,7 @@ baseline 28x28 & 0.829 & 51.3 & 9.67 & 197 & 4.1 min & 29.1 s \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/resolution/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/resolution/samples.png}
 \caption{Images generated by the baseline at 16x16 and at 28x28}
 \end{figure}
 
@@ -575,7 +575,7 @@ ResUNet & 869k & 0.889 & 69.3 & 9.21 & 433 \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/architecture/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/architecture/samples.png}
 \caption{U-Net, control U-Net of the same size, and ResUNet (same starting noise)}
 \end{figure}
 
@@ -634,7 +634,7 @@ K5 = wide U-Net (base\_ch 64) + K4 settings & \multicolumn{3}{c}{diverges} \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/combinaisons/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/combinations/samples.png}
 \caption{Images generated by the combinations (same starting noise)}
 \end{figure}
 
@@ -657,7 +657,7 @@ Hyperparameters: image\_size = 28x28, 50 epochs, C1, C2 and C3 as defined above;
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/candidats_28/loss.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/candidates_28/loss.png}
 \caption{Loss of the three candidates at 28x28}
 \end{figure}
 
@@ -699,7 +699,7 @@ eff. digits & 9.94 / 9.69 & 9.46 / 9.62 & 9.78 \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/comparaisons/C1_vs_C2_graines/samples.png}
+\includegraphics[width=0.8\linewidth]{figures/comparisons/C1_vs_C2_seeds/samples.png}
 \caption{C1 and C2 with two seeds each (same starting noise)}
 \end{figure}
 
@@ -819,7 +819,7 @@ The final model C2 combines a residual architecture, a learning rate of 1e-3, a 
     \item J. Ho, T. Salimans, \textit{Classifier-Free Diffusion Guidance}, 2022.
     \item M. Heusel et al., \textit{GANs Trained by a Two Time-Scale Update Rule Converge to a Local Nash Equilibrium}, 2017 (FID).
     \item Y. LeCun et al., \textit{The MNIST database of handwritten digits}.
-    \item R. Vaucher, stochastic processes course, chapter 4 ``Génération par diffusion''.
+    \item R. Vaucher, stochastic processes course, chapter 4 ``Diffusion Generation''.
     \item A. Ragno, Deep Learning course, ``Generative models'' (U-Net, practical 3c, evaluation of generative models).
     \item Classifier architecture: \url{https://github.com/SabaMG/mnist-cnn-pytorch}.
 \end{itemize}

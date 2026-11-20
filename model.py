@@ -44,7 +44,7 @@ class UNet(nn.Module):
         h0 = self.inc(x) + self.t_inc(e)[:, :, None, None]
         h1 = self.down1(h0) + self.t_down1(e)[:, :, None, None]
         h2 = self.down2(h1) + self.t_down2(e)[:, :, None, None]
-        # sans skip : des zéros à la place des cartes de l'encodeur, même nombre de paramètres
+        # Without skip: zeros replace encoder features, same parameter count.
         s0, s1 = (h0, h1) if self.skip else (torch.zeros_like(h0), torch.zeros_like(h1))
         h = self.mid(h2)
         h = self.dec1(torch.cat([self.up1(h), s1], dim=1)) + self.t_dec1(e)[:, :, None, None]
@@ -102,4 +102,4 @@ def build_model(cfg):
         return UNet(cfg.base_ch, cfg.emb_dim, use_t=False)
     if cfg.model == "resunet":
         return ResUNet(cfg.base_ch, cfg.emb_dim)
-    raise ValueError(f"Modèle inconnu : {cfg.model}")
+    raise ValueError(f"Unknown model: {cfg.model}")

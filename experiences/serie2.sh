@@ -25,6 +25,6 @@ run name=emb32 emb_dim=32
 run name=emb256 emb_dim=256
 
 run name=resunet model=resunet
-run name=unet_ch40_temoin base_ch=40
+run name=unet_ch40_control base_ch=40
 run name=unet_noskip model=unet_noskip
 run name=unet_not model=unet_not

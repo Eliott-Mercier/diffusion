@@ -13,33 +13,33 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Entraîner
+## Train
 
 ```bash
 python train.py --config configs/baseline.yaml
-python train.py --config configs/baseline.yaml --set name=essai lr=1e-3 image_size=28
+python train.py --config configs/baseline.yaml --set name=trial lr=1e-3 image_size=28
 ```
 
-Hyperparamètres : `config.py`. Résultats : `runs/<name>_<date>/`.
+Hyperparameters: `config.py`. Results: `runs/<name>_<date>/`.
 
-## Évaluer et analyser
+## Evaluate and Analyze
 
 ```bash
-python classifier.py --image_size 28            # juge, si classifier/mnist_cnn_28.pt manque
-python verifications.py                         # bruitage, schedule, surapprentissage, trajectoire
-python evaluate.py runs/<run>                   # confiance, diversité, % ratées
+python classifier.py --image_size 28            # judge, if classifier/mnist_cnn_28.pt is missing
+python verifications.py                         # noising, schedule, overfitting, trajectory
+python evaluate.py runs/<run>                   # confidence, diversity, % failed
 python fid.py --references runs/<run>           # FID et IS
-python compare.py runs/<a> runs/<b> --out <nom> # tableau et figures de comparaison
-python evolution.py runs/<run>                  # qualité au fil des époques (checkpoint_every > 0)
-python memorisation.py runs/<run>               # plus proche voisin dans l'entraînement
-python loss_par_t.py runs/<a> runs/<b> --out <nom>
-python visualiser.py runs/<run>                 # bruitage.png et trajectoire.png
+python compare.py runs/<a> runs/<b> --out <name> # table and comparison figures
+python evolution.py runs/<run>                  # quality over epochs (checkpoint_every > 0)
+python memorisation.py runs/<run>               # nearest neighbor in training set
+python loss_par_t.py runs/<a> runs/<b> --out <name>
+python visualiser.py runs/<run>                 # noising.png and trajectory.png
 ```
 
-## Reproduire les essais
+## Reproduce Experiments
 
 ```bash
 bash experiences/serie1.sh   # ... serie5.sh, puis fid.sh, compare_serie2.sh, compare_phase2.sh
 ```
 
-Modèle final : `runs/C2_C1+cosine_28_20261114-114722`.
+Final model: `runs/C2_C1+cosine_28_20261114-114722`.

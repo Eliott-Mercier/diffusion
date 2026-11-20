@@ -30,7 +30,7 @@ def main():
     (run_dir / "samples").mkdir(parents=True)
     cfg.save(run_dir / "config.yaml")
     watts = power_w(cfg.power_w, device)
-    print(f"Run : {run_dir} | device : {device} | puissance supposée {watts:.0f} W")
+    print(f"Run: {run_dir} | device: {device} | assumed power {watts:.0f} W")
 
     dataset = get_dataset(cfg.image_size)
     loader = DataLoader(dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True)
@@ -40,11 +40,11 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     print(f"alpha_bar final = {diffusion.alpha_bar[-1]:.5f}")
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"{n_params:,} paramètres")
+    print(f"{n_params:,} parameters")
 
     losses = []
     start = time.time()
-    train_s = 0.0  # sans le temps de génération des images de suivi
+    train_s = 0.0  # Excludes tracking image generation time.
     with open(run_dir / "losses.csv", "w", newline="") as f:
         csv.writer(f).writerow(["epoch", "loss", "time_s", "train_s", "energy_wh"])
 
@@ -63,7 +63,7 @@ def main():
         train_s += time.time() - epoch_start
         elapsed = time.time() - start
         energy_wh = elapsed * watts / 3600
-        print(f"Époque {epoch}/{cfg.epochs}  loss {losses[-1]:.4f}  ({elapsed / 60:.1f} min, {energy_wh:.2f} Wh)")
+        print(f"Epoch {epoch}/{cfg.epochs}  loss {losses[-1]:.4f}  ({elapsed / 60:.1f} min, {energy_wh:.2f} Wh)")
         with open(run_dir / "losses.csv", "a", newline="") as f:
             csv.writer(f).writerow([epoch, losses[-1], round(elapsed, 1), round(train_s, 1), round(energy_wh, 3)])
 
@@ -76,7 +76,7 @@ def main():
             torch.save(model.state_dict(), run_dir / "checkpoints" / f"epoch_{epoch:03d}.pt")
 
     plt.plot(range(1, len(losses) + 1), losses)
-    plt.xlabel("époque"), plt.ylabel("loss (MSE sur le bruit)"), plt.title(cfg.name)
+    plt.xlabel("epoch"), plt.ylabel("loss (noise MSE)"), plt.title(cfg.name)
     plt.savefig(run_dir / "loss.png", dpi=120)
 
     total_s = time.time() - start
@@ -91,7 +91,7 @@ def main():
         "energy_wh": round(total_s * watts / 3600, 3),
     }
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-    print(f"Terminé — résultats dans {run_dir} | {total_s / 60:.1f} min, ~{summary['energy_wh']:.2f} Wh")
+    print(f"Done - results in {run_dir} | {total_s / 60:.1f} min, ~{summary['energy_wh']:.2f} Wh")
 
 
 if __name__ == "__main__":

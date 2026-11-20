@@ -12,7 +12,7 @@ from config import Config, load_config
 from evaluate import evaluate_run
 from utils import generate, get_device, read_json, read_losses, to_img
 
-# sans effet sur le modèle
+# No effect on model behavior.
 IGNORE = {"name", "sample_every", "n_samples", "power_w"}
 
 
@@ -23,19 +23,19 @@ def changes(cfg):
 
 
 def samples_grid(run_dir, device):
-    imgs = generate(run_dir, 16, device)[1]  # même graine pour tous les runs
+    imgs = generate(run_dir, 16, device)[1]  # Same seed for all runs.
     return make_grid(to_img(imgs.cpu()), nrow=8, pad_value=1)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("runs", nargs="+")
-    parser.add_argument("--out", required=True, help="nom de la comparaison (dossier de sortie)")
-    parser.add_argument("--labels", nargs="*", default=None, help="un label par run (défaut : ce qui change)")
+    parser.add_argument("--out", required=True, help="comparison name (output directory)")
+    parser.add_argument("--labels", nargs="*", default=None, help="one label per run (default: changed parameters)")
     args = parser.parse_args()
 
     device = get_device()
-    out = Path("figures/comparaisons") / args.out
+    out = Path("figures/comparisons") / args.out
     out.mkdir(parents=True, exist_ok=True)
 
     runs = []
@@ -50,27 +50,27 @@ def main():
             "label": args.labels[i] if args.labels else changes(cfg),
             "run": run_dir.name,
             "losses": losses,
-            "loss finale": round(losses[-1], 4),
-            "époques": len(losses),
-            "temps entr. (min)": round(float(rows[-1]["time_s"]) / 60, 1),
+            "final loss": round(losses[-1], 4),
+            "epochs": len(losses),
+            "train time (min)": round(float(rows[-1]["time_s"]) / 60, 1),
             "device": summary.get("device", "?"),
-            "énergie (Wh)": summary.get("energy_wh", "?"),
-            "génération 1000 img (s)": ev["temps_generation_s"],
-            "confiance": ev["confiance_moyenne"],
-            "% > 0.9": ev["pct_confiantes"],
-            "% ratées": ev.get("pct_ratees", "?"),
-            "nb chiffres eff.": ev.get("nb_chiffres_effectif", "?"),
+            "energy (Wh)": summary.get("energy_wh", "?"),
+            "generation 1000 img (s)": ev["generation_time_s"],
+            "confidence": ev["mean_confidence"],
+            "% > 0.9": ev["pct_confident"],
+            "% failed": ev.get("pct_failed", "?"),
+            "effective digits": ev.get("effective_digit_count", "?"),
             "FID": fd.get("fid", "-"),
             "IS": fd.get("is", "-"),
-            "chiffre min/max %": f"{ev['chiffre_min_pct']} / {ev['chiffre_max_pct']}",
+            "digit min/max %": f"{ev['digit_min_pct']} / {ev['digit_max_pct']}",
             "grid": samples_grid(run_dir, device),
         })
 
     fig, ax = plt.subplots(figsize=(7, 4))
     for r in runs:
         ax.plot(range(1, len(r["losses"]) + 1), r["losses"], marker=".", label=r["label"])
-    ax.set_yscale("log"), ax.set_xlabel("époque"), ax.set_ylabel("loss (MSE sur le bruit, log)")
-    ax.set_title(f"Comparaison : {args.out}"), ax.grid(alpha=0.3), ax.legend(fontsize=8)
+    ax.set_yscale("log"), ax.set_xlabel("epoch"), ax.set_ylabel("loss (noise MSE, log)")
+    ax.set_title(f"Comparison: {args.out}"), ax.grid(alpha=0.3), ax.legend(fontsize=8)
     fig.tight_layout()
     fig.savefig(out / "loss.png", dpi=120)
     plt.close(fig)
@@ -78,23 +78,23 @@ def main():
     fig, axes = plt.subplots(len(runs), 1, figsize=(8, 2.3 * len(runs)), squeeze=False)
     for ax, r in zip(axes[:, 0], runs):
         ax.imshow(r["grid"].permute(1, 2, 0))
-        ax.set_title(f"{r['label']}   (confiance {r['confiance']:.2f}, {r['% > 0.9']}% > 0.9)", fontsize=9)
+        ax.set_title(f"{r['label']}   (confidence {r['confidence']:.2f}, {r['% > 0.9']}% > 0.9)", fontsize=9)
         ax.axis("off")
-    fig.suptitle(f"Échantillons, même graine : {args.out}")
+    fig.suptitle(f"Samples, same seed: {args.out}")
     fig.tight_layout()
     fig.savefig(out / "samples.png", dpi=120)
     plt.close(fig)
 
-    cols = ["label", "loss finale", "époques", "temps entr. (min)", "device", "énergie (Wh)",
-            "génération 1000 img (s)", "confiance", "% > 0.9", "% ratées", "nb chiffres eff.", "FID", "IS", "chiffre min/max %", "run"]
-    with open(out / "tableau.csv", "w", newline="") as f:
+    cols = ["label", "final loss", "epochs", "train time (min)", "device", "energy (Wh)",
+            "generation 1000 img (s)", "confidence", "% > 0.9", "% failed", "effective digits", "FID", "IS", "digit min/max %", "run"]
+    with open(out / "table.csv", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(cols)
         w.writerows([[r[c] for c in cols] for r in runs])
     lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     lines += ["| " + " | ".join(str(r[c]) for c in cols) + " |" for r in runs]
     print("\n".join(lines))
-    print(f"\nFigures dans {out}/")
+    print(f"\nFigures in {out}/")
 
 
 if __name__ == "__main__":

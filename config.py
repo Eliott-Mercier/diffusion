@@ -26,7 +26,7 @@ class Config:
     sample_every: int = 5
     n_samples: int = 64
     checkpoint_every: int = 0
-    power_w: float = 0.0  # 0 = valeur par défaut du device
+    power_w: float = 0.0  # 0 = device default value
 
     def save(self, path):
         with open(path, "w") as f:
@@ -45,9 +45,9 @@ def load_config(path=None, overrides=()):
     cfg = Config()
     for key, val in values.items():
         if not hasattr(cfg, key):
-            raise KeyError(f"Hyperparamètre inconnu : {key}")
+            raise KeyError(f"Unknown hyperparameter: {key}")
         default = getattr(cfg, key)
-        # YAML lit « 1e-3 » comme une chaîne
+        # YAML reads "1e-3" as a string.
         if isinstance(default, (int, float)) and not isinstance(default, bool):
             val = type(default)(float(val))
         setattr(cfg, key, val)

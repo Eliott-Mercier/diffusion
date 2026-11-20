@@ -48,7 +48,7 @@ def classifier_path(image_size):
 def load_classifier(image_size, device):
     path = classifier_path(image_size)
     if not path.exists():
-        raise FileNotFoundError(f"{path} absent : lancer d'abord  python classifier.py --image_size {image_size}")
+        raise FileNotFoundError(f"{path} missing: run python classifier.py --image_size {image_size} first")
     clf = CNN(image_size).to(device)
     clf.load_state_dict(torch.load(path, map_location=device))
     return clf.eval()
@@ -71,7 +71,7 @@ def main():
 
     torch.manual_seed(0)
     device = get_device()
-    # tolère des chiffres un peu tournés ou décalés
+    # Make the judge robust to slight rotations/translations.
     train_tf = transforms.Compose([
         transforms.Resize(args.image_size),
         transforms.RandomAffine(10, translate=(0.1, 0.1)),
@@ -93,11 +93,11 @@ def main():
             loss.backward()
             opt.step()
         clf.eval()
-        print(f"Époque {epoch}/{args.epochs}  précision test {accuracy(clf, test_loader, device):.2%}")
+        print(f"Epoch {epoch}/{args.epochs}  test accuracy {accuracy(clf, test_loader, device):.2%}")
 
     CLASSIFIER_DIR.mkdir(exist_ok=True)
     torch.save(clf.state_dict(), classifier_path(args.image_size))
-    print(f"Sauvegardé : {classifier_path(args.image_size)}")
+    print(f"Saved: {classifier_path(args.image_size)}")
 
 
 if __name__ == "__main__":

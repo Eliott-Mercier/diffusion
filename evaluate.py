@@ -11,7 +11,7 @@ from classifier import JUDGE_SIZE, load_classifier, to_judge
 from utils import generate, get_device, real_images, show
 
 SEUIL = 0.9
-SEUIL_FOND = 0.5  # part minimale de pixels noirs (fond)
+SEUIL_FOND = 0.5  # Minimal fraction of dark pixels (background).
 
 
 @torch.no_grad()
@@ -21,30 +21,30 @@ def scores(clf, imgs):
     return pred.cpu(), conf.cpu()
 
 
-def ratees(imgs):
+def is_failed(imgs):
     return ((imgs < -0.5).float().mean((1, 2, 3)) < SEUIL_FOND).cpu()
 
 
-def metrics(pred, conf, failed):
-    counts = torch.bincount(pred[~failed], minlength=10)
+def metrics(pred, conf, failed_mask):
+    counts = torch.bincount(pred[~failed_mask], minlength=10)
     n = max(counts.sum().item(), 1)
     p = counts[counts > 0] / n
     return {
-        "pct_ratees": round(failed.float().mean().item() * 100, 1),
-        "confiance_moyenne": round(conf.mean().item(), 4),
-        "pct_confiantes": round((conf > SEUIL).float().mean().item() * 100, 1),
-        "repartition": counts.tolist(),
-        "nb_chiffres_effectif": round(torch.exp(-(p * p.log()).sum()).item(), 2),
-        "chiffre_min_pct": round(counts.min().item() / n * 100, 1),
-        "chiffre_max_pct": round(counts.max().item() / n * 100, 1),
+        "pct_failed": round(failed_mask.float().mean().item() * 100, 1),
+        "mean_confidence": round(conf.mean().item(), 4),
+        "pct_confident": round((conf > SEUIL).float().mean().item() * 100, 1),
+        "distribution": counts.tolist(),
+        "effective_digit_count": round(torch.exp(-(p * p.log()).sum()).item(), 2),
+        "digit_min_pct": round(counts.min().item() / n * 100, 1),
+        "digit_max_pct": round(counts.max().item() / n * 100, 1),
     }
 
 
 def judge(clf, imgs):
     pred, conf = scores(clf, imgs)
-    failed = ratees(imgs)
-    conf = torch.where(failed, torch.zeros_like(conf), conf)
-    return pred, conf, metrics(pred, conf, failed)
+    failed_mask = is_failed(imgs)
+    conf = torch.where(failed_mask, torch.zeros_like(conf), conf)
+    return pred, conf, metrics(pred, conf, failed_mask)
 
 
 def figure(run_dir, imgs, pred, conf, m, ref):
@@ -53,38 +53,38 @@ def figure(run_dir, imgs, pred, conf, m, ref):
 
     ax = fig.add_subplot(gs[0, 0])
     x = torch.arange(10)
-    ax.bar(x - 0.2, ref["repartition"], 0.4, label="vraies images", color="lightgray")
-    ax.bar(x + 0.2, m["repartition"], 0.4, label="générées")
-    ax.set_xticks(x), ax.set_xlabel("chiffre prédit"), ax.set_ylabel("nombre")
-    ax.set_title("Répartition des chiffres"), ax.legend(fontsize=8)
+    ax.bar(x - 0.2, ref["distribution"], 0.4, label="real images", color="lightgray")
+    ax.bar(x + 0.2, m["distribution"], 0.4, label="generated")
+    ax.set_xticks(x), ax.set_xlabel("predicted digit"), ax.set_ylabel("count")
+    ax.set_title("Digit distribution"), ax.legend(fontsize=8)
 
     ax = fig.add_subplot(gs[0, 1])
     ax.hist(conf, bins=20, range=(0, 1))
-    ax.axvline(SEUIL, color="red", ls="--", label=f"seuil {SEUIL}")
-    ax.set_xlabel("confiance du classifieur"), ax.set_ylabel("nombre d'images")
-    ax.set_title(f"Confiance (moyenne {m['confiance_moyenne']:.3f})"), ax.legend(fontsize=8)
+    ax.axvline(SEUIL, color="red", ls="--", label=f"threshold {SEUIL}")
+    ax.set_xlabel("classifier confidence"), ax.set_ylabel("image count")
+    ax.set_title(f"Confidence (mean {m['mean_confidence']:.3f})"), ax.legend(fontsize=8)
 
     ax = fig.add_subplot(gs[0, 2])
     ax.axis("off")
-    lignes = [f"{'':18s}{'générées':>10s}{'réf.':>8s}"]
-    for label, key, fmt in [("confiance moy.", "confiance_moyenne", ".3f"), ("% conf. > 0.9", "pct_confiantes", ".1f"),
-                            ("chiffre min %", "chiffre_min_pct", ".1f"), ("chiffre max %", "chiffre_max_pct", ".1f"),
-                            ("nb chiffres eff.", "nb_chiffres_effectif", ".2f"), ("% ratées", "pct_ratees", ".1f")]:
-        lignes.append(f"{label:18s}{m[key]:>10{fmt}}{ref[key]:>8{fmt}}")
-    ax.text(0, 0.9, "\n".join(lignes), va="top", family="monospace", fontsize=9)
+    lines = [f"{'':18s}{'generated':>10s}{'ref.':>8s}"]
+    for label, key, fmt in [("mean conf.", "mean_confidence", ".3f"), ("% conf. > 0.9", "pct_confident", ".1f"),
+                            ("digit min %", "digit_min_pct", ".1f"), ("digit max %", "digit_max_pct", ".1f"),
+                            ("effective digits", "effective_digit_count", ".2f"), ("% failed", "pct_failed", ".1f")]:
+        lines.append(f"{label:18s}{m[key]:>10{fmt}}{ref[key]:>8{fmt}}")
+    ax.text(0, 0.9, "\n".join(lines), va="top", family="monospace", fontsize=9)
 
     imgs = imgs.cpu()
     order = conf.argsort()
     sub = gs[1, :].subgridspec(2, 8)
-    for row, (title, idx) in enumerate([("les plus reconnues", order[-8:].flip(0)),
-                                        ("les moins reconnues", order[:8])]):
+    for row, (title, idx) in enumerate([("most recognized", order[-8:].flip(0)),
+                                        ("least recognized", order[:8])]):
         for j, i in enumerate(idx):
             a = fig.add_subplot(sub[row, j])
             show(a, imgs[i, 0])
             a.set_title(f"{pred[i].item()} ({conf[i]:.2f})", fontsize=8)
             if j == 0:
                 a.text(-0.3, 0.5, title, transform=a.transAxes, rotation=90, va="center", ha="right", fontsize=8)
-    fig.suptitle(f"Évaluation par classifieur : {Path(run_dir).name}  (n={len(imgs)})")
+    fig.suptitle(f"Classifier evaluation: {Path(run_dir).name}  (n={len(imgs)})")
     fig.tight_layout()
     fig.savefig(Path(run_dir) / "eval.png", dpi=110)
     plt.close(fig)
@@ -98,14 +98,16 @@ def evaluate_run(run_dir, n=1000, device=None, clf=None):
     ref = judge(clf, real_images(cfg.image_size, False, n).to(device))[2]
     ref28 = ref if cfg.image_size == JUDGE_SIZE else judge(clf, real_images(JUDGE_SIZE, False, n).to(device))[2]
     pred, conf, m = judge(clf, imgs)
-    m.update({"temps_generation_s": round(gen_time, 1), "n": n, "reference_vraies_images": ref,
-              "reference_28_natif": ref28, "juge": f"classifieur {JUDGE_SIZE}x{JUDGE_SIZE}"})
+    m.update({"generation_time_s": round(gen_time, 1), "n": n, "reference_real_images": ref,
+              "native_28_reference": ref28, "judge": f"classifier {JUDGE_SIZE}x{JUDGE_SIZE}"})
 
     (Path(run_dir) / "eval.json").write_text(json.dumps(m, indent=2))
     figure(run_dir, imgs, pred, conf, m, ref)
-    print(f"{Path(run_dir).name}: confiance {m['confiance_moyenne']:.3f} (réf. {ref['confiance_moyenne']:.3f}) | "
-          f"{m['pct_confiantes']}% > {SEUIL} (réf. {ref['pct_confiantes']}%) | {m['pct_ratees']}% ratées | "
-          f"{m['nb_chiffres_effectif']} chiffres eff. | répartition {m['repartition']} | génération {gen_time:.0f}s")
+    print(
+        f"{Path(run_dir).name}: confidence {m['mean_confidence']:.3f} (ref. {ref['mean_confidence']:.3f}) | "
+        f"{m['pct_confident']}% > {SEUIL} (ref. {ref['pct_confident']}%) | {m['pct_failed']}% failed | "
+        f"{m['effective_digit_count']} effective digits | distribution {m['distribution']} | generation {gen_time:.0f}s"
+    )
     return m
 
 

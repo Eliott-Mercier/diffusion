@@ -10,7 +10,7 @@ from config import load_config
 from diffusion import Diffusion
 from model import build_model
 
-# puissance supposée (W), pas mesurée : energie = duree x puissance
+# Assumed power (W), not measured: energy = duration x power.
 DEFAULT_POWER_W = {"mps": 40.0, "cpu": 45.0, "cuda": 70.0}
 
 
@@ -30,7 +30,7 @@ def get_dataset(image_size, train=True):
     transform = transforms.Compose([
         transforms.Resize(image_size),
         transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,)),  # [-1, 1], comme le bruit
+        transforms.Normalize((0.5,), (0.5,)),  # [-1, 1], same range as noise.
     ])
     return datasets.MNIST("data", train=train, download=True, transform=transform)
 

@@ -36,17 +36,17 @@ def main():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
     for run_dir, label in zip(args.runs, labels):
         x, losses, ab = loss_by_t(run_dir, device)
-        ax1.plot(x, losses, marker=".", label=f"{label} (moyenne {sum(losses) / len(losses):.3f})")
+        ax1.plot(x, losses, marker=".", label=f"{label} (mean {sum(losses) / len(losses):.3f})")
         ax2.plot(ab, losses, marker=".", label=label)
-    ax1.set_xlabel("t / T"), ax1.set_ylabel("MSE sur le bruit"), ax1.set_yscale("log")
-    ax1.set_title("Loss selon l'étape t"), ax1.grid(alpha=0.3), ax1.legend(fontsize=8)
-    ax2.set_xlabel(r"$\bar\alpha_t$ (part de l'image restante)"), ax2.set_yscale("log")
-    ax2.set_title(r"Loss selon le niveau de bruit $\bar\alpha_t$"), ax2.grid(alpha=0.3), ax2.legend(fontsize=8)
+    ax1.set_xlabel("t / T"), ax1.set_ylabel("noise MSE"), ax1.set_yscale("log")
+    ax1.set_title("Loss by step t"), ax1.grid(alpha=0.3), ax1.legend(fontsize=8)
+    ax2.set_xlabel(r"$\bar\alpha_t$ (remaining image fraction)"), ax2.set_yscale("log")
+    ax2.set_title(r"Loss by noise level $\bar\alpha_t$"), ax2.grid(alpha=0.3), ax2.legend(fontsize=8)
     fig.tight_layout()
     out = Path("figures/loss_par_t")
     out.mkdir(parents=True, exist_ok=True)
     fig.savefig(out / f"{args.out}.png", dpi=120)
-    print(f"Figure : {out / args.out}.png")
+    print(f"Figure: {out / args.out}.png")
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ import torch
 from scipy import linalg
 
 from classifier import JUDGE_SIZE, load_classifier, to_judge
-from evaluate import ratees
+from evaluate import is_failed
 from utils import generate, get_device, read_json, real_images
 
 N_REF = 10000
@@ -31,7 +31,7 @@ def gaussian(feats):
 
 def fid(stats_a, stats_b):
     (mu1, s1), (mu2, s2) = stats_a, stats_b
-    covmean = linalg.sqrtm(s1 @ s2).real  # partie imaginaire = erreurs d'arrondi
+    covmean = linalg.sqrtm(s1 @ s2).real  # Imaginary part comes from rounding errors.
     return float(((mu1 - mu2) ** 2).sum() + np.trace(s1 + s2 - 2 * covmean))
 
 
@@ -54,10 +54,10 @@ def reference_stats(clf, device):
 
 
 def references(clf, device, ref):
-    sources = [("vraies images 28x28 (test)", real_images(28, False, N_REF)),
-               ("vraies images 16x16 agrandies (test)", real_images(16, False, N_REF))]
+    sources = [("real images 28x28 (test)", real_images(28, False, N_REF)),
+               ("real images 16x16 upscaled (test)", real_images(16, False, N_REF))]
     torch.manual_seed(0)
-    sources.append(("bruit pur N(0, I)", torch.randn(N_REF, 1, 28, 28, device=device)))
+    sources.append(("pure noise N(0, I)", torch.randn(N_REF, 1, 28, 28, device=device)))
     out = {}
     for name, imgs in sources:
         f, p = feats_and_probs(clf, imgs.to(device))
@@ -73,14 +73,14 @@ def evaluate_fid(run_dir, clf, device, n, ref):
     res = {
         "fid": round(fid(ref, gaussian(f)), 2),
         "is": round(inception_score(p), 2),
-        "pct_ratees": round(ratees(imgs).float().mean().item() * 100, 1),
+        "pct_failed": round(is_failed(imgs).float().mean().item() * 100, 1),
         "n": n,
-        "temps_generation_s": round(gen_time, 1),
-        "protocole": f"classifieur MNIST {JUDGE_SIZE}x{JUDGE_SIZE} (128 caractéristiques), réf. = {N_REF} images d'entraînement",
+        "generation_time_s": round(gen_time, 1),
+        "protocol": f"MNIST classifier {JUDGE_SIZE}x{JUDGE_SIZE} (128 features), ref. = {N_REF} training images",
     }
     (Path(run_dir) / "fid.json").write_text(json.dumps(res, indent=2, ensure_ascii=False))
     print(f"{Path(run_dir).name:45s} FID {res['fid']:8.2f} | IS {res['is']:.2f} | "
-          f"{res['pct_ratees']}% ratées | {gen_time:.0f}s")
+            f"{res['pct_failed']}% failed | {gen_time:.0f}s")
     return res
 
 
@@ -93,12 +93,12 @@ def table():
     for fj in sorted(Path("runs").glob("*/fid.json")):
         r = json.loads(fj.read_text())
         ev = read_json(fj.parent / "eval.json")
-        runs.append([fj.parent.name, r["fid"], r["is"], ev.get("confiance_moyenne", ""),
-                     ev.get("nb_chiffres_effectif", ""), r["pct_ratees"]])
+        runs.append([fj.parent.name, r["fid"], r["is"], ev.get("mean_confidence", ""),
+                     ev.get("effective_digit_count", ""), r["pct_failed"]])
     rows += sorted(runs, key=lambda r: r[1])
-    with open(OUT / "tableau.csv", "w", newline="") as f:
+    with open(OUT / "table.csv", "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["run", "fid", "is", "confiance", "nb_chiffres_effectif", "pct_ratees"])
+        w.writerow(["run", "fid", "is", "mean_confidence", "effective_digit_count", "pct_failed"])
         w.writerows(rows)
     for r in rows:
         print(" | ".join(str(x) for x in r))
